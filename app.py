@@ -15,14 +15,20 @@ if uploaded_file:
     df.columns = df.columns.str.strip()
 
     # Vérifie les colonnes nécessaires
-    required_cols = {'Player', 'Date', 'Time_above_90_FCmax'}
+    required_cols = {'Player', 'Date', 'Time in Heart Zone 5', 'Time in Heart Zone 6'}
     if not required_cols.issubset(df.columns):
         st.error(f"⚠️ Le fichier doit contenir les colonnes suivantes : {required_cols}")
     else:
-        df['Date'] = pd.to_datetime(df['Date'])
+        # Conversion date
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+
+        # Calcule du temps total >90% FCmax
+        df['Time_above_90_FCmax'] = df['Time in Heart Zone 5'].fillna(0) + df['Time in Heart Zone 6'].fillna(0)
+
+        # Ajoute la semaine ISO
         df['Semaine'] = df['Date'].dt.isocalendar().week
 
-        # Calcul hebdomadaire
+        # Résumé hebdomadaire
         weekly_summary = (
             df.groupby(['Player', 'Semaine'])['Time_above_90_FCmax']
             .sum()
@@ -57,4 +63,3 @@ if uploaded_file:
         )
 else:
     st.info("➡️ Importez un fichier CSV pour commencer.")
-
