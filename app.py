@@ -1,0 +1,65 @@
+import streamlit as st
+import pandas as pd
+from io import BytesIO
+
+st.set_page_config(page_title="Dashboard Cardiac", layout="wide")
+
+st.title("🏋️ Dashboard Cardiac — Temps >90% FCmax")
+
+# === Upload du CSV ===
+uploaded_file = st.file_uploader("📤 Importer un fichier CSV", type=["csv"])
+
+if uploaded_file:
+    # Lecture du CSV
+    df = pd.read_csv(uploaded_file)
+    df.columns = df.columns.str.strip()
+
+    # Vérifie les colonnes nécessaires
+    required_cols = {'Player', 'Date', 'Time in Heart Zone 5', 'Time in Heart Zone 6'}
+    if not required_cols.issubset(df.columns):
+        st.error(f"⚠️ Le fichier doit contenir les colonnes suivantes : {required_cols}")
+    else:
+        # Conversion date
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+
+        # Calcule du temps total >90% FCmax
+        df['Time_above_90_FCmax'] = df['Time in Heart Zone 5'].fillna(0) + df['Time in Heart Zone 6'].fillna(0)
+
+        # Ajoute la semaine ISO
+        df['Semaine'] = df['Date'].dt.isocalendar().week
+
+        # Résumé hebdomadaire
+        weekly_summary = (
+            df.groupby(['Player', 'Semaine'])['Time_above_90_FCmax']
+            .sum()
+            .reset_index()
+            .rename(columns={'Time_above_90_FCmax': 'Temps total (>90% FCmax)'})
+        )
+
+        # === Affichage ===
+        st.subheader("📋 Données brutes")
+        st.dataframe(df)
+
+        st.subheader("📆 Résumé hebdomadaire")
+        st.dataframe(weekly_summary)
+
+        st.subheader("📊 Graphique hebdomadaire par joueur")
+        player = st.selectbox("Choisir un joueur :", sorted(df['Player'].unique()))
+        st.bar_chart(
+            weekly_summary[weekly_summary['Player'] == player],
+            x="Semaine", y="Temps total (>90% FCmax)"
+        )
+
+        # === Export Excel ===
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Données brutes')
+            weekly_summary.to_excel(writer, index=False, sheet_name='Résumé hebdomadaire')
+        st.download_button(
+            label="💾 Télécharger le fichier Excel",
+            data=output.getvalue(),
+            file_name="HeartRate_Summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+else:
+    st.info("➡️ Importez un fichier CSV pour commencer.")
